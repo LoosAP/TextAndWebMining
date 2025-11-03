@@ -1,13 +1,8 @@
-# 2 ötlet van eddig
+# A projekt témája
 
-## 1. ötlet
+- Title és descriptionból valamilyen chart (mondjuk piechart vagy barchart), meg egy input, ahova ha beír az ember egy adott szót akkor megmutatja hogy melyik oldalon milyen gyakran fordul elő az adott szó (pl hányszor itt és hányszor ott)
 
-- title és descriptiont összegyüjtjük, kategoriákhuz hozzátársitjuk, és matplotlibbel mindenféle chartot készitünk hogy adott oldal mikkel dolgozik
-
-## 2.ötlet (ez lesz amúgy)
-
-- Title és descriptionból valamilyen chart (mondjuk piechart), meg egy input, ahova ha beír az ember egy adott szót akkor megmutatja hogy melyik oldalon milyen gyakran fordul elő az adott szó (pl hányszor itt és hányszor ott)
-
+- Emellett lehetne egy táblázat is, ami mutatja az egyes oldalak top 10 leggyakoribb szavait (stopwordök nélkül)
 # Adatforrások
 
 Telex: https://telex.hu/rss
