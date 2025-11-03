@@ -16,3 +16,6 @@ Portfolio: https://www.portfolio.hu/rss/all.xml
 24: https://24.hu/feed/
 hvg: https://hvg.hu/rss
 444: https://444.hu/feed
+
+
+<img width="576" height="324" alt="preUI" src="https://github.com/user-attachments/assets/4cb5bfb5-b186-4895-9140-ee7431df8b43" />
