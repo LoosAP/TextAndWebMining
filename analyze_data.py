@@ -3,7 +3,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import panel as pn
 import hvplot.pandas
 
-pn.extension()
+# Enable Panel extensions and a responsive sizing mode for a more modern feel
+pn.extension('tabulator', sizing_mode="stretch_width")
 
 # Load the data
 try:
@@ -17,7 +18,7 @@ except FileNotFoundError:
 # 1. Word frequency analysis for a given word
 def plot_word_frequency(word):
     if not word:
-        return pn.pane.Markdown("Please enter a word to search.")
+        return pn.pane.Alert("Please enter a word to search.", alert_type="warning")
     
     word = word.lower()
     df['title_desc'] = (df['title'].fillna('').str.lower() + " " + 
@@ -33,8 +34,7 @@ def plot_word_frequency(word):
     chart = frequency_by_source.hvplot.bar(
         x='source', 
         y='word_count', 
-        height=400, 
-        width=600,
+        height=400,
         title=f"Frequency of the word '{word}' by source",
         xlabel="Source",
         ylabel="Total Count"
@@ -52,7 +52,7 @@ def get_top_words_by_source():
     # Combine title and description for analysis
     df['text'] = df['title'].fillna('') + ' ' + df['description'].fillna('')
     
-    top_words_tables = []
+    top_words_cards = []
     
     for source in df['source'].unique():
         source_df = df[df['source'] == source]
@@ -73,41 +73,69 @@ def get_top_words_by_source():
             top_10 = words_freq[:10]
             top_10_df = pd.DataFrame(top_10, columns=['Word', 'TF-IDF Score'])
             
-            # Create a table for the source
-            table = pn.Column(
-                pn.pane.Markdown(f"### Top 10 words for {source}"),
-                pn.widgets.DataFrame(top_10_df, height=250, width=300)
+            # Create a modern-looking card with a Tabulator grid
+            try:
+                table = pn.widgets.Tabulator(
+                    top_10_df,
+                    height=260,
+                    widths={'Word': 180, 'TF-IDF Score': 140},
+                    layout='fit_data_table',
+                    selectable=False,
+                )
+            except Exception:
+                # Fallback to simple DataFrame widget if Tabulator resources are unavailable
+                table = pn.widgets.DataFrame(top_10_df, height=260, width=340)
+
+            card = pn.Card(
+                table,
+                title=f"Top 10 words • {source}",
+                collapsed=False,
+                styles={"minWidth": "320px"}
             )
-            top_words_tables.append(table)
+            top_words_cards.append(card)
         except ValueError:
             # This can happen if a source has no text after stopword removal
             continue
             
-    return pn.GridBox(*top_words_tables, ncols=3)
+    if not top_words_cards:
+        return pn.pane.Alert("No top words could be computed for the sources.", alert_type="warning")
+
+    return pn.GridBox(*top_words_cards, ncols=3)
 
 
 # --- UI Components ---
-word_input = pn.widgets.TextInput(name='Word', placeholder='Enter a word...')
+word_input = pn.widgets.TextInput(name='Word', placeholder='Search for a word…')
 
-# Bind the function to the input widget
-dynamic_chart = pn.bind(plot_word_frequency, word=word_input)
+# Reactive views
+word_freq_view = pn.bind(plot_word_frequency, word=word_input)
+top_words_view = get_top_words_by_source()
 
-# Dashboard Layout
-dashboard = pn.Column(
-    pn.pane.Markdown("# RSS Feed Analysis"),
-    pn.Row(
-        pn.Column(
-            "## Word Frequency Across Sources",
-            word_input,
-            dynamic_chart
+# Modern template-based layout
+template = pn.template.FastListTemplate(
+    title="RSS Feed Analysis",
+    theme="dark",  # set default theme to dark; values: 'default', 'dark', 'system'
+    header_background="#0F172A",  # slate-900
+    accent="#3B82F6",  # blue-500
+    sidebar=[
+        pn.pane.Markdown("""
+        ### Controls
+        Type a word to analyze its frequency across news sources.
+        """),
+        word_input,
+    ],
+    main=[
+        pn.Card(
+            word_freq_view,
+            title="Word Frequency Across Sources",
+            collapsed=False,
         ),
-    ),
-    pn.layout.Divider(),
-    pn.Column(
-        "## Top 10 Most Frequent Words by Source (TF-IDF)",
-        get_top_words_by_source()
-    )
+        pn.Card(
+            top_words_view,
+            title="Top 10 Most Frequent Words by Source (TF-IDF)",
+            collapsed=False,
+        ),
+    ],
 )
 
 # To display the dashboard
-dashboard.servable()
+template.servable()
