@@ -2,6 +2,15 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 import panel as pn
 import hvplot.pandas
+import time
+from sklearn.cluster import KMeans
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, silhouette_score
 
 # Enable Panel extensions and a responsive sizing mode for a more modern feel
 pn.extension('tabulator', sizing_mode="stretch_width")
@@ -102,6 +111,80 @@ def get_top_words_by_source():
 
     return pn.GridBox(*top_words_cards, ncols=3)
 
+# 3. Run ML algorithms and measure time
+def run_ml_algorithms(df):
+    if df.empty:
+        return pn.pane.Alert("DataFrame is empty, cannot run ML algorithms.", alert_type="warning")
+
+    # Prepare the data
+    df['text'] = df['title'].fillna('') + ' ' + df['description'].fillna('')
+    
+    # Vectorize the text data
+    vectorizer = TfidfVectorizer(max_features=1000, stop_words='english') # Using english stopwords for broader compatibility
+    X = vectorizer.fit_transform(df['text'])
+
+    # --- K-Means Clustering ---
+    start_time = time.time()
+    kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X)
+    kmeans_time = time.time() - start_time
+    silhouette = silhouette_score(X, labels)
+
+    # Split data for classification models
+    X_train, X_test, y_train, y_test = train_test_split(X, labels, test_size=0.3, random_state=42)
+
+    # --- Decision Tree Classifier ---
+    start_time = time.time()
+    tree = DecisionTreeClassifier(random_state=42)
+    tree.fit(X_train, y_train)
+    tree_preds = tree.predict(X_test)
+    tree_time = time.time() - start_time
+    tree_accuracy = accuracy_score(y_test, tree_preds)
+
+    # --- SVM Classifier ---
+    start_time = time.time()
+    svm = make_pipeline(StandardScaler(with_mean=False), SVC(random_state=42))
+    svm.fit(X_train, y_train)
+    svm_preds = svm.predict(X_test)
+    svm_time = time.time() - start_time
+    svm_accuracy = accuracy_score(y_test, svm_preds)
+
+    # --- K-Nearest Neighbors Classifier ---
+    start_time = time.time()
+    knn = KNeighborsClassifier(n_neighbors=5)
+    knn.fit(X_train, y_train)
+    knn_preds = knn.predict(X_test)
+    knn_time = time.time() - start_time
+    knn_accuracy = accuracy_score(y_test, knn_preds)
+
+    # --- Visualization of results ---
+    results_data = {
+        'Algorithm': ['K-Means', 'Decision Tree', 'SVM', 'KNN'],
+        'Execution Time (s)': [kmeans_time, tree_time, svm_time, knn_time],
+        'Score': [silhouette, tree_accuracy, svm_accuracy, knn_accuracy],
+        'Metric': ['Silhouette Score', 'Accuracy', 'Accuracy', 'Accuracy']
+    }
+    results_df = pd.DataFrame(results_data)
+
+    time_chart = results_df.hvplot.bar(
+        x='Algorithm',
+        y='Execution Time (s)',
+        title='Execution Time of ML Algorithms',
+        height=400,
+        rot=45
+    ).opts(yformatter='%.3f')
+
+    score_chart = results_df.hvplot.bar(
+        x='Algorithm',
+        y='Score',
+        c='Metric',
+        title='Performance of ML Algorithms',
+        height=400,
+        rot=45
+    ).opts(yformatter='%.3f')
+    
+    return pn.Column(time_chart, score_chart)
+
 
 # --- UI Components ---
 word_input = pn.widgets.TextInput(name='Word', placeholder='Search for a word…')
@@ -109,6 +192,7 @@ word_input = pn.widgets.TextInput(name='Word', placeholder='Search for a word…
 # Reactive views
 word_freq_view = pn.bind(plot_word_frequency, word=word_input)
 top_words_view = get_top_words_by_source()
+ml_timing_view = run_ml_algorithms(df.copy()) # Pass a copy to avoid side effects
 
 # Modern template-based layout
 template = pn.template.FastListTemplate(
@@ -132,6 +216,11 @@ template = pn.template.FastListTemplate(
         pn.Card(
             top_words_view,
             title="Top 10 Most Frequent Words by Source (TF-IDF)",
+            collapsed=False,
+        ),
+        pn.Card(
+            ml_timing_view,
+            title="Machine Learning Algorithm Performance",
             collapsed=False,
         ),
     ],
