@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 import panel as pn
 import hvplot.pandas
@@ -14,6 +15,18 @@ from sklearn.metrics import accuracy_score, silhouette_score
 
 # Enable Panel extensions and a responsive sizing mode for a more modern feel
 pn.extension('tabulator', sizing_mode="stretch_width")
+
+# Hungarian stopword list used across analyses (expand as needed)
+HUNGARIAN_STOPWORDS = [
+    'és', 'a', 'az', 'is', 'egy', 'vagy', 'nem', 'de', 'hogy', 'van', 'volt', 'lesz', 'meg', 'kell',
+    'csak', 'ez', 'azt', 'itt', 'ott', 'majd', 'mint', 'tovább', 'valamint', 'illetve', 'még', 'sem',
+    'sok', 'nagyon', 'több', 'így', 'úgy', 'akkor', 'amikor', 'ahol', 'ami', 'aki', 'amit', 'akik',
+    'annak', 'ennek', 'ezért', 'azért', 'mert', 'hanem', 'hiszen', 'pedig', 'szerint', 'alatt',
+    'fölött', 'között', 'nélkül', 'után', 'előtt', 'mellett', 'át', 'be', 'ki', 'le', 'fel', 'össze',
+    'vissza', 'el', 'megint', 'mindig', 'soha', 'talán', 'persze', 'biztos', 'valóban', 'tehát',
+    'végül', 'azaz', 'illetőleg', 'való', 'egyik', 'másik', 'minden', 'semmi', 'valaki', 'valami',
+    'senki', 'bár', 'habár', 'noha', 'jóllehet', 'bárcsak', 'vajon', 'ugye', 'íme', 'nos', 'igen', 'se'
+]
 
 # Load the data
 try:
@@ -53,10 +66,8 @@ def plot_word_frequency(word):
 
 # 2. Top 10 most frequent words (excluding stopwords)
 def get_top_words_by_source():
-    # A simple list of Hungarian stopwords, can be extended
-    stopwords = ['és', 'a', 'az', 'is', 'egy', 'vagy', 'nem', 'de', 'hogy', 'van', 'volt', 'lesz', 'meg', 'kell', 'csak', 'ez', 'azt', 'itt', 'ott', 'majd', 'mint', 'tovább', 'valamint', 'illetve', 'még', 'sem', 'sok', 'nagyon', 'több', 'így', 'úgy', 'akkor', 'amikor', 'ahol', 'ami', 'aki', 'amit', 'akik', 'annak', 'ennek', 'ezért', 'azért', 'mert', 'hanem', 'hiszen', 'pedig', 'szerint', 'alatt', 'fölött', 'között', 'nélkül', 'után', 'előtt', 'mellett', 'át', 'be', 'ki', 'le', 'fel', 'össze', 'vissza', 'el', 'megint', 'mindig', 'soha', 'talán', 'persze', 'biztos', 'valóban', 'tehát', 'végül', 'azaz', 'illetőleg', 'való', 'egyik', 'másik', 'minden', 'semmi', 'valaki', 'valami', 'senki', 'bár', 'habár', 'noha', 'jóllehet', 'bárcsak', 'vajon', 'ugye', 'íme', 'nos', 'igen', 'se']
-    
-    vectorizer = TfidfVectorizer(stop_words=stopwords, max_features=1000)
+    # Use global Hungarian stopwords for consistency
+    vectorizer = TfidfVectorizer(stop_words=HUNGARIAN_STOPWORDS, max_features=1000)
     
     # Combine title and description for analysis
     df['text'] = df['title'].fillna('') + ' ' + df['description'].fillna('')
@@ -119,8 +130,8 @@ def run_ml_algorithms(df):
     # Prepare the data
     df['text'] = df['title'].fillna('') + ' ' + df['description'].fillna('')
     
-    # Vectorize the text data
-    vectorizer = TfidfVectorizer(max_features=1000, stop_words='english') # Using english stopwords for broader compatibility
+    # Vectorize the text data (Hungarian stopwords)
+    vectorizer = TfidfVectorizer(max_features=1000, stop_words=HUNGARIAN_STOPWORDS)
     X = vectorizer.fit_transform(df['text'])
 
     # --- K-Means Clustering ---
@@ -166,24 +177,26 @@ def run_ml_algorithms(df):
     }
     results_df = pd.DataFrame(results_data)
 
-    time_chart = results_df.hvplot.bar(
+    time_chart = results_df.hvplot.line(
         x='Algorithm',
         y='Execution Time (s)',
         title='Execution Time of ML Algorithms',
         height=400,
-        rot=45
+        width=400,
+        rot=45,
+        legend='top_right'
     ).opts(yformatter='%.3f')
-
-    score_chart = results_df.hvplot.bar(
+    score_chart = results_df.hvplot.line(
         x='Algorithm',
         y='Score',
-        c='Metric',
         title='Performance of ML Algorithms',
         height=400,
-        rot=45
+        width=400,
+        rot=45,
+        legend='top_right',
     ).opts(yformatter='%.3f')
     
-    return pn.Column(time_chart, score_chart)
+    return pn.Row(time_chart, score_chart)
 
 
 # --- UI Components ---
@@ -192,7 +205,62 @@ word_input = pn.widgets.TextInput(name='Word', placeholder='Search for a word…
 # Reactive views
 word_freq_view = pn.bind(plot_word_frequency, word=word_input)
 top_words_view = get_top_words_by_source()
-ml_timing_view = run_ml_algorithms(df.copy()) # Pass a copy to avoid side effects
+ml_timing_view = pn.bind(run_ml_algorithms, df=df.copy())
+
+# 4. Andris érkezési idők – 08:00–09:00 közötti vonaldiagram
+def andris_arrivals_chart(filepath='andrisErkezes.txt'):
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except FileNotFoundError:
+        return pn.pane.Alert(f"'{filepath}' nem található a projekt gyökerében.", alert_type="warning")
+
+    # Szétválasztás vesszőkön és sortöréseken
+    raw_times = [t.strip() for t in re.split(r'[\s,]+', content) if t.strip()]
+    if not raw_times:
+        return pn.pane.Alert("A fájl üres vagy nem tartalmaz értelmezhető időpontokat.", alert_type="warning")
+
+    base = pd.Timestamp.today().normalize()
+
+    def parse_hm(txt):
+        try:
+            parts = txt.split(':')
+            if len(parts) != 2:
+                return None
+            h = int(parts[0])
+            m = int(parts[1])
+            return base + pd.Timedelta(hours=h, minutes=m)
+        except Exception:
+            return None
+
+    times_dt = [parse_hm(t) for t in raw_times]
+    times_dt = [t for t in times_dt if t is not None]
+
+    if not times_dt:
+        return pn.pane.Alert("Nem sikerült egy időpontot sem beolvasni (formátum: H:MM vagy HH:MM).", alert_type="warning")
+
+    df_arr = pd.DataFrame({
+        'Alkalom': list(range(1, len(times_dt) + 1)),
+        'Idő': times_dt,
+    })
+
+    eight = base + pd.Timedelta(hours=8)
+    nine = base + pd.Timedelta(hours=9)
+
+    chart = df_arr.hvplot.line(
+        x='Alkalom',
+        y='Idő',
+        title='Andris érkezései (08:00–09:00)',
+        height=400,
+        width=750,
+        xlabel='Alkalom',
+        ylabel='Idő',
+        ylim=(eight, nine),
+    )
+
+    return chart
+
+andris_chart_view = andris_arrivals_chart()
 
 # Modern template-based layout
 template = pn.template.FastListTemplate(
@@ -206,6 +274,7 @@ template = pn.template.FastListTemplate(
         Type a word to analyze its frequency across news sources.
         """),
         word_input,
+        # Fixed chart width set in code
     ],
     main=[
         pn.Card(
@@ -221,6 +290,11 @@ template = pn.template.FastListTemplate(
         pn.Card(
             ml_timing_view,
             title="Machine Learning Algorithm Performance",
+            collapsed=False,
+        ),
+        pn.Card(
+            andris_chart_view,
+            title="Andris érkezései",
             collapsed=False,
         ),
     ],
